@@ -7,23 +7,26 @@ use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::gpio::PinDriver;
 
 
-fn main() -> anyhow::Result<()>  {
+fn main() -> anyhow::Result<()> {
     // It is necessary to call this function once. Otherwise some patches to the runtime
     // implemented by esp-idf-sys might not link properly. See https://github.com/esp-rs/esp-idf-template/issues/71
     esp_idf_svc::sys::link_patches();
 
 
     let peripherals = Peripherals::take()?;
-    let mut led = PinDriver::output(peripherals.pins.gpio2)?;
+    let mut led1 = PinDriver::output(peripherals.pins.gpio2)?;
+    let mut led2 = PinDriver::output(peripherals.pins.gpio3)?;
 
     // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();
 
     loop {
         log::info!("Hello, world!");
-        led.set_high()?;
+        led1.set_high()?;
+        led2.set_low()?;
         FreeRtos::delay_ms(1000);
-        led.set_low()?;
+        led1.set_low()?;
+        led2.set_high()?;
         FreeRtos::delay_ms(1000);
     }
 }
