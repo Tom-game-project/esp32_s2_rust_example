@@ -16,20 +16,18 @@ use esp_idf_svc::{
 use heapless::String;
 use std::env;
 
+const SSID_STR: &'static str = env!("SSID");
+const SSID_PASSWORD_STR: &'static str = env!("SSID_PASSWORD");
+
 fn main() -> anyhow::Result<()> {
     // It is necessary to call this function once. Otherwise some patches to the runtime
     // implemented by esp-idf-sys might not link properly. See https://github.com/esp-rs/esp-idf-template/issues/71
-
     esp_idf_svc::sys::link_patches();
 
-    let ssid_str: &'static str = env!("SSID");
-    let ssid_password_str: &'static str = env!("SSID_PASSWORD");
-
-    let ssid = String::<32>::try_from(ssid_str).unwrap();
-    let password = String::<64>::try_from(ssid_password_str).unwrap();
+    let ssid = String::<32>::try_from(SSID_STR).unwrap();
+    let password = String::<64>::try_from(SSID_PASSWORD_STR).unwrap();
 
     let peripherals = Peripherals::take()?;
-
     let sys_loop = EspSystemEventLoop::take().unwrap();
     let nvs = EspDefaultNvsPartition::take().unwrap();
 
