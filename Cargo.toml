@@ -18,9 +18,10 @@ debug = true    # Symbols are nice and they don't increase the size on Flash
 opt-level = "z"
 
 [features]
-default = []
+default = ["std"]
 
 experimental = ["esp-idf-svc/experimental"]
+std = ["esp-idf-svc/std"]
 
 [dependencies]
 log = "0.4"
