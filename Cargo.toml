@@ -26,9 +26,14 @@ std = ["esp-idf-svc/std"]
 [dependencies]
 log = "0.4"
 heapless = "0.8.0"
-embedded-svc = "0.23.1"
-esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
+embedded-svc = "0.24"
+esp-idf-svc = { version = "0.50.1", features = ["critical-section", "embassy-time-driver", "embassy-sync", "std"] }
 anyhow = "1.0.86"
+smart-leds = "0.3.0"
+
+[dependencies.esp-idf-hal]
+version = "0.45.2"
+features = ["rmt-legacy"]
 
 [build-dependencies]
 embuild = "0.33"
