@@ -1,21 +1,18 @@
-// 修正点: 古いAPIに合わせてSPIInterfaceNoCSをインポート
-use display_interface_spi::SPIInterfaceNoCS;
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
-    pixelcolor::Rgb565,
+    pixelcolor::BinaryColor,
     prelude::*,
     primitives::{PrimitiveStyleBuilder, Rectangle},
     text::Text,
 };
-//use embedded_hal::spi::MODE_3;
 use esp_idf_svc::hal::{
     delay::Ets,
     gpio::AnyIOPin,
-    spi::{config::{Config as SpiConfig, MODE_3}, SpiDeviceDriver, SpiDriver, SpiDriverConfig},
+    // `Mode`をインポートして、コードを簡潔にする
+    spi::{config::Config as SpiConfig, config::MODE_3, SpiDeviceDriver, SpiDriver, SpiDriverConfig},
     units::FromValueType,
 };
-// 修正点: embedded_halから直接MODE_3をインポート
-use mipidsi::{Builder, Orientation};
+use sh1106::{prelude::*, Builder};
 
 use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::gpio::PinDriver;
@@ -27,9 +24,9 @@ fn main() -> anyhow::Result<()> {
 
     let peripherals = Peripherals::take()?;
 
-    // --- LCD初期化コード ---
-    log::info!("Initializing LCD");
+    log::info!("Initializing OLED");
 
+    // 1. ピン定義
     let rst_pin = peripherals.pins.gpio38;
     let dc_pin = peripherals.pins.gpio37;
     let mut backlight = PinDriver::output(peripherals.pins.gpio33)?;
@@ -38,6 +35,7 @@ fn main() -> anyhow::Result<()> {
     let cs_pin = peripherals.pins.gpio34;
     let spi_peripheral = peripherals.spi2;
 
+    // 2. SPIドライバ初期化
     let spi_driver = SpiDriver::new(
         spi_peripheral,
         sclk_pin,
@@ -46,45 +44,61 @@ fn main() -> anyhow::Result<()> {
         &SpiDriverConfig::new(),
     )?;
 
+    // 3. SPI通信設定
     let spi_config = SpiConfig::new()
-       .baudrate(40.MHz().into())
-       .data_mode(MODE_3); // 修正点: インポートしたMODE_3を直接使用
+   .baudrate(40.MHz().into())
+   .data_mode(MODE_3); // `esp-idf-hal`が提供する`SpiMode`を使用
 
-    let spi_device = SpiDeviceDriver::new(spi_driver, Some(cs_pin), &spi_config)?;
+    // 4. SPIデバイスドライバ作成
+    let spi_device = SpiDeviceDriver::new(spi_driver, None::<AnyIOPin>, &spi_config)?;
 
+    // 5. 制御ピンのドライバを作成
     let dc_driver = PinDriver::output(dc_pin)?;
-    // 修正点: 古いAPIのSPIInterfaceNoCSを使用
-    let di = SPIInterfaceNoCS::new(spi_device, dc_driver);
+    let cs_driver = PinDriver::output(cs_pin)?;
+    let mut rst_driver = PinDriver::output(rst_pin)?;
 
-    let rst_driver = PinDriver::output(rst_pin)?;
+    // 6. ディスプレイドライバ初期化
     let mut delay = Ets;
 
-    let mut display = Builder::st7789(di)
-       .with_display_size(240, 240)
-       .with_orientation(Orientation::Portrait(false))
-       .init(&mut delay, Some(rst_driver)) // `?`演算子が使えるようにエラー型を修正
-       .map_err(|e| anyhow::anyhow!("Display init error: {:?}", e))?;
+    // ハードウェアリセットを実行
+    rst_driver.set_low()?;
+    FreeRtos::delay_ms(50);
+    rst_driver.set_high()?;
+    FreeRtos::delay_ms(50);
+
+    // sh1106のBuilderに、生のSPIデバイスと制御ピンを直接渡す
+    let mut display: GraphicsMode<_> = Builder::new()
+   .with_size(DisplaySize::Display128x64)
+   .with_rotation(DisplayRotation::Rotate0)
+   .connect_spi(spi_device, dc_driver, cs_driver)
+   .into();
+
+    // `init`は引数を取らない
+    display.init().map_err(|e| anyhow::anyhow!("Display init error: {:?}", e))?;
+    log::info!("OLED Initialized");
 
     backlight.set_high()?;
-    display.clear(Rgb565::BLACK).map_err(|e| anyhow::anyhow!("Display clear error: {:?}", e))?;
 
-    log::info!("LCD Initialized");
+    // 8. 描画処理
+    // `clear`は引数を取らず、エラーも返さない
+    display.clear();
 
     let style = PrimitiveStyleBuilder::new()
-       .stroke_color(Rgb565::YELLOW)
-       .fill_color(Rgb565::BLUE)
-       .stroke_width(2)
-       .build();
+   .stroke_color(BinaryColor::On)
+   .stroke_width(1)
+   .build();
 
-    Rectangle::new(Point::new(20, 20), Size::new(200, 50))
-       .into_styled(style)
-       .draw(&mut display)
-       .map_err(|e| anyhow::anyhow!("Draw rectangle error: {:?}", e))?;
+    Rectangle::new(Point::new(2, 2), Size::new(124, 60))
+   .into_styled(style)
+   .draw(&mut display)
+   .map_err(|e| anyhow::anyhow!("Draw rectangle error: {:?}", e))?;
 
-    let text_style = MonoTextStyle::new(&FONT_10X20, Rgb565::WHITE);
-    Text::new("Hello, Rust!", Point::new(60, 45), text_style)
-       .draw(&mut display)
-       .map_err(|e| anyhow::anyhow!("Draw text error: {:?}", e))?;
+    let text_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
+    Text::new("Hello OLED!", Point::new(10, 25), text_style)
+   .draw(&mut display)
+   .map_err(|e| anyhow::anyhow!("Draw text error: {:?}", e))?;
+
+    display.flush().map_err(|e| anyhow::anyhow!("Display flush error: {:?}", e))?;
 
     let mut led = PinDriver::output(peripherals.pins.gpio2)?;
     loop {
