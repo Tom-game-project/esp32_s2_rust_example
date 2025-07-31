@@ -1,15 +1,19 @@
 use embedded_graphics::{
-    mono_font::{ascii::FONT_10X20, MonoTextStyle},
-    pixelcolor::BinaryColor,
+    mono_font::{ascii::* , MonoTextStyle},
+    pixelcolor::{BinaryColor, Rgb565},
     prelude::*,
     primitives::{PrimitiveStyleBuilder, Rectangle},
     text::Text,
 };
 use esp_idf_svc::hal::{
-    delay::Ets,
     gpio::AnyIOPin,
-    // `Mode`をインポートして、コードを簡潔にする
-    spi::{config::Config as SpiConfig, config::MODE_3, SpiDeviceDriver, SpiDriver, SpiDriverConfig},
+    spi::{
+        config::Config as SpiConfig,
+        config::MODE_3,
+        SpiDeviceDriver,
+        SpiDriver,
+        SpiDriverConfig
+    },
     units::FromValueType,
 };
 use sh1106::{prelude::*, Builder};
@@ -58,8 +62,6 @@ fn main() -> anyhow::Result<()> {
     let mut rst_driver = PinDriver::output(rst_pin)?;
 
     // 6. ディスプレイドライバ初期化
-    let mut delay = Ets;
-
     // ハードウェアリセットを実行
     rst_driver.set_low()?;
     FreeRtos::delay_ms(50);
@@ -83,29 +85,52 @@ fn main() -> anyhow::Result<()> {
     // `clear`は引数を取らず、エラーも返さない
     display.clear();
 
-    let style = PrimitiveStyleBuilder::new()
+   let style = PrimitiveStyleBuilder::new()
    .stroke_color(BinaryColor::On)
    .stroke_width(1)
    .build();
 
-    Rectangle::new(Point::new(2, 2), Size::new(124, 60))
+    Rectangle::new(Point::new(2, 2), Size::new(126, 60))
    .into_styled(style)
    .draw(&mut display)
    .map_err(|e| anyhow::anyhow!("Draw rectangle error: {:?}", e))?;
 
-    let text_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
+    let text_style = MonoTextStyle::new(&FONT_5X7, BinaryColor::On);
     Text::new("Hello OLED!", Point::new(10, 25), text_style)
    .draw(&mut display)
    .map_err(|e| anyhow::anyhow!("Draw text error: {:?}", e))?;
 
     display.flush().map_err(|e| anyhow::anyhow!("Display flush error: {:?}", e))?;
 
-    let mut led = PinDriver::output(peripherals.pins.gpio2)?;
+    // let mut led = PinDriver::output(peripherals.pins.gpio2)?;
+    let mut sec = 0;
     loop {
-        log::info!("Blinking LED...");
-        led.set_high()?;
-        FreeRtos::delay_ms(1000);
-        led.set_low()?;
+        //log::info!("Blinking LED...");
+        //led.set_high()?;
+        //FreeRtos::delay_ms(1000);
+        //led.set_low()?;
+        //FreeRtos::delay_ms(1000);
+
+        display.clear();
+
+        let style = PrimitiveStyleBuilder::new()
+        .stroke_color(BinaryColor::On)
+        .stroke_width(1)
+        .build();
+
+        Rectangle::new(Point::new(2, 2), Size::new(3, 3))
+        .into_styled(style)
+        .draw(&mut display)
+        .map_err(|e| anyhow::anyhow!("Draw rectangle error: {:?}", e))?;
+
+        let text_style = MonoTextStyle::new(&FONT_5X7, BinaryColor::On);
+        Text::new(format!("SEC {}", sec).as_str(), Point::new(10, 25), text_style)
+        .draw(&mut display)
+        .map_err(|e| anyhow::anyhow!("Draw text error: {:?}", e))?;
+
+        display.flush().map_err(|e| anyhow::anyhow!("Display flush error: {:?}", e))?;
+        sec += 1;
+        sec = sec % 60;
         FreeRtos::delay_ms(1000);
     }
 }
