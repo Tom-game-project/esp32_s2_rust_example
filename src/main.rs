@@ -22,6 +22,9 @@ use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::gpio::PinDriver;
 use esp_idf_svc::hal::prelude::Peripherals;
 
+mod adxl367;
+use adxl367::Adxl367;
+
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
@@ -38,6 +41,12 @@ fn main() -> anyhow::Result<()> {
     let sda_pin = peripherals.pins.gpio35;
     let cs_pin = peripherals.pins.gpio34;
     let spi_peripheral = peripherals.spi2;
+ 
+    let sclk_pin_adxl = peripherals.pins.gpio7;
+    let mosi_adxl = peripherals.pins.gpio5;
+    let miso_adxl = peripherals.pins.gpio6;
+
+    let cs_adxl = peripherals.pins.gpio32;
 
     // 2. SPIドライバ初期化
     let spi_driver = SpiDriver::new(
@@ -48,13 +57,36 @@ fn main() -> anyhow::Result<()> {
         &SpiDriverConfig::new(),
     )?;
 
+    //let spi_driver2 = SpiDriver::new(
+    //    spi_peripheral, 
+    //    sclk_pin_adxl, 
+    //    mosi_adxl, 
+    //    Some(miso_adxl), &SpiDriverConfig::new()
+    //)?;
+
     // 3. SPI通信設定
     let spi_config = SpiConfig::new()
    .baudrate(40.MHz().into())
    .data_mode(MODE_3); // `esp-idf-hal`が提供する`SpiMode`を使用
 
     // 4. SPIデバイスドライバ作成
-    let spi_device = SpiDeviceDriver::new(spi_driver, None::<AnyIOPin>, &spi_config)?;
+    let spi_device = SpiDeviceDriver::new(
+        &spi_driver, 
+        None::<AnyIOPin>,
+        &spi_config
+    )?;
+
+    // ADXL367用のCS（GPIO32）をドライバ化して SpiDeviceDriver を構築
+    let mut cs_adxl_driver = PinDriver::output(cs_adxl)?;
+
+    let adxl_spi_device = SpiDeviceDriver::new(
+        &spi_driver,
+        None::<AnyIOPin>, 
+        &spi_config 
+    )?;
+
+    // 3. ドライバに渡す
+    let adxl = Adxl367::new(adxl_spi_device);
 
     // 5. 制御ピンのドライバを作成
     let dc_driver = PinDriver::output(dc_pin)?;
@@ -66,6 +98,11 @@ fn main() -> anyhow::Result<()> {
     rst_driver.set_low()?;
     FreeRtos::delay_ms(50);
     rst_driver.set_high()?;
+    FreeRtos::delay_ms(50);
+
+    cs_adxl_driver.set_low()?;
+    FreeRtos::delay_ms(50);
+    cs_adxl_driver.set_high()?;
     FreeRtos::delay_ms(50);
 
     // sh1106のBuilderに、生のSPIデバイスと制御ピンを直接渡す
@@ -105,7 +142,7 @@ fn main() -> anyhow::Result<()> {
     // let mut led = PinDriver::output(peripherals.pins.gpio2)?;
     let mut sec = 0;
     loop {
-        //log::info!("Blinking LED...");
+        log::info!("Hello ESP32 S2...");
         //led.set_high()?;
         //FreeRtos::delay_ms(1000);
         //led.set_low()?;
