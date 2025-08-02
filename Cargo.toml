@@ -37,3 +37,4 @@ features = ["rmt-legacy"]
 
 [build-dependencies]
 embuild = "0.33"
+dotenvy = "0.15.7"
