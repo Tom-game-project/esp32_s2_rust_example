@@ -2,8 +2,8 @@
 /.embuild
 /target
 /Cargo.lock
-# env 
-.env
-# vim
-*.swp
+# vim 
 *.swo
+*.swp
+# env
+.env
