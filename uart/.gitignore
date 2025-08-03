@@ -1,0 +1,10 @@
+/.vscode
+/.embuild
+/target
+/Cargo.lock
+
+# env
+.env
+# vim
+*.swp
+*.swo
