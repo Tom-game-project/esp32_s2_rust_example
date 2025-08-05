@@ -55,6 +55,7 @@ fn main() -> anyhow::Result<()> {
 
     // 4. SPIデバイスドライバ作成
     let spi_device = SpiDeviceDriver::new(spi_driver, None::<AnyIOPin>, &spi_config)?;
+    //let spi_device = SpiDeviceDriver::new_single(spi, sclk, sdo, sdi, cs, bus_config, config)
 
     // 5. 制御ピンのドライバを作成
     let dc_driver = PinDriver::output(dc_pin)?;
@@ -102,15 +103,8 @@ fn main() -> anyhow::Result<()> {
 
     display.flush().map_err(|e| anyhow::anyhow!("Display flush error: {:?}", e))?;
 
-    // let mut led = PinDriver::output(peripherals.pins.gpio2)?;
     let mut sec = 0;
     loop {
-        //log::info!("Blinking LED...");
-        //led.set_high()?;
-        //FreeRtos::delay_ms(1000);
-        //led.set_low()?;
-        //FreeRtos::delay_ms(1000);
-
         display.clear();
 
         let style = PrimitiveStyleBuilder::new()

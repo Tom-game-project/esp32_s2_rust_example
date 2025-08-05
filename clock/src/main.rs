@@ -1,10 +1,8 @@
-use embedded_graphics::primitives::Circle;
-use embedded_svc::sys_time::SystemTime;
+use anyhow::Result;
 use esp_idf_hal::sys::{gettimeofday, timeval, tzset};
 use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::hal::gpio::PinDriver;
 use esp_idf_svc::hal::rmt::{
-    config::TransmitConfig, 
     FixedLengthSignal, 
     PinState,
     Pulse, 
@@ -23,30 +21,25 @@ use esp_idf_svc::hal::{
     units::FromValueType,
 };
 use esp_idf_svc::{
-    wifi::EspWifi,
-    wifi::ClientConfiguration,
-    wifi::Configuration,
+    wifi::{EspWifi, ClientConfiguration, Configuration, BlockingWifi},
     nvs::EspDefaultNvsPartition,
     eventloop::EspSystemEventLoop,
-    systime::EspSystemTime,
     sntp::{EspSntp, SyncStatus},
 };
 
 use esp_idf_svc::hal::delay::FreeRtos;
 
 use heapless::String;
+use sh1106::interface::DisplayInterface;
 use std::env;
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
 use std::thread::sleep;
 use std::time::Duration;
 
 use sh1106::{prelude::*, Builder};
 use embedded_graphics::{
     mono_font::{ascii::* , MonoTextStyle},
-    pixelcolor::{BinaryColor, Rgb565},
+    pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{PrimitiveStyleBuilder, Rectangle},
     text::Text,
 };
 
@@ -56,13 +49,10 @@ const SSID_PASSWORD_STR: &'static str = env!("SSID_PASSWORD");
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
 
-    let ssid = String::<32>::try_from(SSID_STR).unwrap();
-    let password = String::<64>::try_from(SSID_PASSWORD_STR).unwrap();
 
     let peripherals = Peripherals::take()?;
     let sys_loop = EspSystemEventLoop::take().unwrap();
     let nvs = EspDefaultNvsPartition::take().unwrap();
-
 
     // 1. ピン定義
     let rst_pin = peripherals.pins.gpio38;
@@ -84,8 +74,8 @@ fn main() -> anyhow::Result<()> {
 
     // 3. SPI通信設定
     let spi_config = SpiConfig::new()
-   .baudrate(40.MHz().into())
-   .data_mode(MODE_3); // `esp-idf-hal`が提供する`SpiMode`を使用
+       .baudrate(40.MHz().into())
+       .data_mode(MODE_3); // `esp-idf-hal`が提供する`SpiMode`を使用
 
     // 4. SPIデバイスドライバ作成
     let spi_device = SpiDeviceDriver::new(spi_driver, None::<AnyIOPin>, &spi_config)?;
@@ -104,68 +94,56 @@ fn main() -> anyhow::Result<()> {
 
     // sh1106のBuilderに、生のSPIデバイスと制御ピンを直接渡す
     let mut display: GraphicsMode<_> = Builder::new()
-   .with_size(DisplaySize::Display128x64)
-   .with_rotation(DisplayRotation::Rotate0)
-   .connect_spi(spi_device, dc_driver, cs_driver)
-   .into();
+       .with_size(DisplaySize::Display128x64)
+       .with_rotation(DisplayRotation::Rotate0)
+       .connect_spi(spi_device, dc_driver, cs_driver)
+       .into();
     display.init().map_err(|e| anyhow::anyhow!("Display init error: {:?}", e))?;
     log::info!("OLED Initialized");
 
     backlight.set_high()?;
-    display.clear();
-
-
-    let mut wifi_driver = EspWifi::new(
+    
+    show_msg_log(&mut display, format!("{}", "connecting wifi...").as_str())?;
+    let wifi_driver = EspWifi::new(
         peripherals.modem,
-        sys_loop,
+        sys_loop.clone(),
         Some(nvs)
-    ).unwrap();
-
-    wifi_driver.set_configuration(&Configuration::Client(ClientConfiguration{
-        ssid,
-        password,
-        ..Default::default()
-    })).unwrap();
-
-    wifi_driver.start().unwrap();
-    wifi_driver.connect().unwrap();
+    )?;
+    let mut wifi_driver = BlockingWifi::wrap(wifi_driver, sys_loop)?;
+    connect_wifi(&mut wifi_driver)?;
+    show_msg_log(&mut display, format!("{}", "connected to Wifi!").as_str())?;
 
     // NeoPixel (WS2812B) on GPIO18
-    let led_pin = peripherals.pins.gpio18;
-    let channel = peripherals.rmt.channel0;
-    let config = TransmitConfig::new().clock_divider(1);
-    let mut neopixel_tx = TxRmtDriver::new(channel, led_pin, &config)?;
+    //let led_pin = peripherals.pins.gpio18;
+    //let channel = peripherals.rmt.channel0;
+    //let config = TransmitConfig::new().clock_divider(1);
+    //let mut neopixel_tx = TxRmtDriver::new(channel, led_pin, &config)?;
 
     esp_idf_svc::log::EspLogger::initialize_default();
 
-    while !wifi_driver.is_connected().unwrap(){
-        let config = wifi_driver.get_configuration().unwrap();
-        println!("Waiting for station {:?}", config);
-    }
-
-    let ip_info = wifi_driver.sta_netif().get_ip_info().unwrap();
-    log::info!("Wi-Fi connected, IP: {:?}", ip_info.ip);
-
-    let listener = TcpListener::bind("0.0.0.0:8080")?;
-    log::info!("TCP server listening on 0.0.0.0:8080");
-
+    //let listener = TcpListener::bind("0.0.0.0:8080")?;
+    //log::info!("TCP server listening on 0.0.0.0:8080");
 
     // --- 2. SNTPサービスによる時刻同期 ---
     log::info!("Initializing SNTP...");
+    show_msg_log(&mut display, format!("{}", "Initializing SNTP...").as_str())?;
+
     let sntp = EspSntp::new_default()?;
 
     log::info!("Waiting for time synchronization...");
+    show_msg_log(&mut display, format!("{}", "Waiting for time synchronization...").as_str())?;
     while sntp.get_sync_status() != SyncStatus::Completed {
         //FreeRtos::delay_ms(5);
         sleep(Duration::from_millis(100));
     }
     log::info!("Time synchronized successfully!");
+    show_msg_log(&mut display, format!("{}", "Time synchronized successfully!").as_str())?;
 
     loop {
             // タイムゾーンを日本標準時 (JST) に設定
             // POSIX TZフォーマットでは、UTCからのオフセットの符号が逆になることに注意
             // JSTはUTC+9だが、"JST-9"と指定する
-            env::set_var("TZ", "JST+9");
+            env::set_var("TZ", "JST-9");
             unsafe { tzset() }
             // gettimeofdayを呼び出してUNIXタイムスタンプを取得
             let mut tv = timeval{
@@ -180,19 +158,17 @@ fn main() -> anyhow::Result<()> {
                .expect("Invalid timestamp");
             // フォーマットして表示
 
-            display.clear();
-            let style = PrimitiveStyleBuilder::new()
-            .stroke_color(BinaryColor::On)
-            .stroke_width(1)
-            .build();
-
+            //let style = PrimitiveStyleBuilder::new()
+            //.stroke_color(BinaryColor::On)
+            //.stroke_width(1)
+            //.build();
             //Rectangle::new(Point::new(2, 2), Size::new(3, 3))
             //.into_styled(style)
             //.draw(&mut display)
             //.map_err(|e| anyhow::anyhow!("Draw rectangle error: {:?}", e))?;
-
             //Circle::new(Point::new(0, 0), diameter).into_styled(style).draw(display).map_err(|e| anyhow::anyhow!("Draw rectangle error: {:?}", e))?;
 
+            display.clear();
             let text_style = MonoTextStyle::new(&FONT_5X7, BinaryColor::On);
             Text::new(format!("{}", dt.format("%Y-%m-%d")).as_str(), Point::new(10, 25), text_style)
             .draw(&mut display)
@@ -200,8 +176,8 @@ fn main() -> anyhow::Result<()> {
             Text::new(format!("{}", dt.format("%H:%M:%S %Z")).as_str(), Point::new(10, 39), text_style)
             .draw(&mut display)
             .map_err(|e| anyhow::anyhow!("Draw text error: {:?}", e))?;
-
             display.flush().map_err(|e| anyhow::anyhow!("Display flush error: {:?}", e))?;
+
             FreeRtos::delay_ms(500);
     }
 }
@@ -257,3 +233,35 @@ impl From<Rgb> for u32 {
     }
 }
 
+fn connect_wifi(wifi_driver: &mut BlockingWifi<EspWifi<'static>>) -> Result<()>
+{
+    let ssid = String::<32>::try_from(SSID_STR).unwrap();
+    let password = String::<64>::try_from(SSID_PASSWORD_STR).unwrap();
+
+    wifi_driver.set_configuration(&Configuration::Client(ClientConfiguration{
+        ssid,
+        password,
+        ..Default::default()
+    })).unwrap();
+
+    wifi_driver.start()?;
+    wifi_driver.connect()?;
+    while !wifi_driver.is_connected().unwrap(){
+        let config = wifi_driver.get_configuration().unwrap();
+        println!("Waiting for station {:?}", config);
+    }
+    wifi_driver.wait_netif_up()?;
+    Ok(())
+}
+
+fn show_msg_log<T>(display: &mut GraphicsMode<T>, msg :&str) -> Result<()>
+    where T: DisplayInterface, <T as DisplayInterface>::Error: std::fmt::Debug
+{
+    display.clear();
+    let text_style = MonoTextStyle::new(&FONT_5X7, BinaryColor::On);
+    Text::new(msg, Point::new(5, 25), text_style)
+        .draw(display)
+        .map_err(|e| anyhow::anyhow!("Draw text error: {:?}", e))?;
+    display.flush().map_err(|e| anyhow::anyhow!("Display flush error: {:?}", e))?;
+    Ok(())
+}
