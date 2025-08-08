@@ -1,6 +1,6 @@
 use embedded_graphics::{
     mono_font::{ascii::* , MonoTextStyle},
-    pixelcolor::{BinaryColor, Rgb565},
+    pixelcolor::{BinaryColor},
     prelude::*,
     primitives::{PrimitiveStyleBuilder, Rectangle},
     text::Text,
@@ -17,10 +17,79 @@ use esp_idf_svc::hal::{
     units::FromValueType,
 };
 use sh1106::{prelude::*, Builder};
-
 use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::gpio::PinDriver;
+use esp_idf_svc::hal::gpio;
 use esp_idf_svc::hal::prelude::Peripherals;
+use crate::gpio::OutputPin;
+use crate::gpio::Output;
+use esp_idf_svc::hal::peripheral::Peripheral;
+use esp_idf_svc::hal::spi;
+
+/// 任意のGPIOピンとSPIペリフェラルを受け取り、ディスプレイの初期化を行う
+fn set_display<'d, RST, DC, SCLK, SDA, CS, SPI>(
+    rst_pin: RST,
+    dc_pin: DC,
+    sclk_pin: SCLK,
+    sda_pin: SDA,
+    cs_pin: CS,
+    spi_peripheral: SPI,
+) -> anyhow::Result<(
+    GraphicsMode<
+        SpiInterface<
+            SpiDeviceDriver<'d, SpiDriver<'d>>,
+            // PinDriverにOutputモードを指定
+            PinDriver<'d, DC, Output>,
+            PinDriver<'d, CS, Output>
+        >
+    >,
+    PinDriver<'d, RST, Output> // rst_driverの型 (DropされてしまうとLCDがうまく表示されない)
+)>
+where
+    // コンパイラの指示に従い、必要なトレイト境界を追加
+    RST: Peripheral<P = RST> + OutputPin,
+    DC: Peripheral<P = DC> + OutputPin,
+    CS: Peripheral<P = CS> + OutputPin,
+    SCLK: Peripheral<P = SCLK> + OutputPin,
+    SDA: Peripheral<P = SDA> + OutputPin,
+    SPI: Peripheral<P = SPI> + spi::Spi + esp_idf_svc::hal::spi::SpiAnyPins + 'd,
+{
+    // ...関数の実装部分は変更なし...
+
+    let spi_driver = SpiDriver::new(
+        spi_peripheral,
+        sclk_pin,
+        sda_pin,
+        None::<AnyIOPin>,
+        &SpiDriverConfig::new(),
+    )?;
+
+    let spi_config = SpiConfig::new()
+        .baudrate(40.MHz().into())
+        .data_mode(MODE_3);
+
+    let spi_device = SpiDeviceDriver::new(spi_driver, None::<AnyIOPin>, &spi_config)?;
+
+    let dc_driver = PinDriver::output(dc_pin)?;
+    let cs_driver = PinDriver::output(cs_pin)?;
+    let mut rst_driver = PinDriver::output(rst_pin)?;
+
+    rst_driver.set_low()?;
+    FreeRtos::delay_ms(50);
+    rst_driver.set_high()?;
+    FreeRtos::delay_ms(50);
+
+    let mut display :GraphicsMode<_>= Builder::new()
+        .with_size(DisplaySize::Display128x64)
+        .with_rotation(DisplayRotation::Rotate0)
+        .connect_spi(spi_device, dc_driver, cs_driver)
+        .into();
+
+    display.init().map_err(|e| anyhow::anyhow!("Display init error: {:?}", e))?;
+    log::info!("OLED Initialized");
+
+    Ok((display, rst_driver))
+}
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
@@ -33,73 +102,38 @@ fn main() -> anyhow::Result<()> {
     // 1. ピン定義
     let rst_pin = peripherals.pins.gpio38;
     let dc_pin = peripherals.pins.gpio37;
-    let mut backlight = PinDriver::output(peripherals.pins.gpio33)?;
     let sclk_pin = peripherals.pins.gpio36;
     let sda_pin = peripherals.pins.gpio35;
     let cs_pin = peripherals.pins.gpio34;
     let spi_peripheral = peripherals.spi2;
 
-    // 2. SPIドライバ初期化
-    let spi_driver = SpiDriver::new(
-        spi_peripheral,
-        sclk_pin,
+    let (mut display, _rst_driver) = set_display(
+        rst_pin,
+        dc_pin,
+        sclk_pin, 
         sda_pin,
-        None::<AnyIOPin>,
-        &SpiDriverConfig::new(),
+        cs_pin, 
+        spi_peripheral
     )?;
-
-    // 3. SPI通信設定
-    let spi_config = SpiConfig::new()
-   .baudrate(40.MHz().into())
-   .data_mode(MODE_3); // `esp-idf-hal`が提供する`SpiMode`を使用
-
-    // 4. SPIデバイスドライバ作成
-    let spi_device = SpiDeviceDriver::new(spi_driver, None::<AnyIOPin>, &spi_config)?;
-    //let spi_device = SpiDeviceDriver::new_single(spi, sclk, sdo, sdi, cs, bus_config, config)
-
-    // 5. 制御ピンのドライバを作成
-    let dc_driver = PinDriver::output(dc_pin)?;
-    let cs_driver = PinDriver::output(cs_pin)?;
-    let mut rst_driver = PinDriver::output(rst_pin)?;
-
-    // 6. ディスプレイドライバ初期化
-    // ハードウェアリセットを実行
-    rst_driver.set_low()?;
-    FreeRtos::delay_ms(50);
-    rst_driver.set_high()?;
-    FreeRtos::delay_ms(50);
-
-    // sh1106のBuilderに、生のSPIデバイスと制御ピンを直接渡す
-    let mut display: GraphicsMode<_> = Builder::new()
-   .with_size(DisplaySize::Display128x64)
-   .with_rotation(DisplayRotation::Rotate0)
-   .connect_spi(spi_device, dc_driver, cs_driver)
-   .into();
-
-    // `init`は引数を取らない
-    display.init().map_err(|e| anyhow::anyhow!("Display init error: {:?}", e))?;
-    log::info!("OLED Initialized");
-
-    backlight.set_high()?;
 
     // 8. 描画処理
     // `clear`は引数を取らず、エラーも返さない
     display.clear();
 
    let style = PrimitiveStyleBuilder::new()
-   .stroke_color(BinaryColor::On)
-   .stroke_width(1)
-   .build();
+       .stroke_color(BinaryColor::On)
+       .stroke_width(1)
+       .build();
 
     Rectangle::new(Point::new(2, 2), Size::new(126, 60))
-   .into_styled(style)
-   .draw(&mut display)
-   .map_err(|e| anyhow::anyhow!("Draw rectangle error: {:?}", e))?;
+        .into_styled(style)
+        .draw(&mut display)
+        .map_err(|e| anyhow::anyhow!("Draw rectangle error: {:?}", e))?;
 
     let text_style = MonoTextStyle::new(&FONT_5X7, BinaryColor::On);
     Text::new("Hello OLED!", Point::new(10, 25), text_style)
-   .draw(&mut display)
-   .map_err(|e| anyhow::anyhow!("Draw text error: {:?}", e))?;
+        .draw(&mut display)
+        .map_err(|e| anyhow::anyhow!("Draw text error: {:?}", e))?;
 
     display.flush().map_err(|e| anyhow::anyhow!("Display flush error: {:?}", e))?;
 
@@ -126,5 +160,6 @@ fn main() -> anyhow::Result<()> {
         sec += 1;
         sec = sec % 60;
         FreeRtos::delay_ms(1000);
+        log::info!("hello world    !!!!!");
     }
 }
