@@ -1,19 +1,14 @@
-<<<<<<< HEAD
 /.vscode
 /.embuild
 /target
 /Cargo.lock
 # env 
 .env
-||||||| 1b37e0b
 /.vscode
 /.embuild
 /target
 /Cargo.lock
-=======
 
-
->>>>>>> feat/uart
 # vim
 *.swp
 *.swo
