@@ -28,5 +28,7 @@ esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-
 anyhow = "1.0.86"
 embedded-hal= "1.0.0"
 
+esp32s2_common_lib = { path = "../esp32s2_common_lib" }
+
 [build-dependencies]
 embuild = "0.33"

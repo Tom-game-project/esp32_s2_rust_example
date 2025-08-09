@@ -4,7 +4,6 @@
 //! 1秒ごとにX, Y, Z軸の加速度を読み取ってコンソールに出力します。
 
 // 作成したドライバをモジュールとして読み込みます
-mod mma7660fc;
 
 //use std::thread;
 //use std::time::Duration;
@@ -14,9 +13,10 @@ use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::units::FromValueType;
 
-
 use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
-use mma7660fc::{Mma7660fc, Mode, DEFAULT_I2C_ADDRESS};
+
+use esp32s2_common_lib::mma7660fc::{Mode, DEFAULT_I2C_ADDRESS, Mma7660fc};
+
 
 fn main() -> anyhow::Result<()> {
     // ランタイムのパッチをリンクします

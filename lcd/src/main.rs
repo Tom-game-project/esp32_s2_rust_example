@@ -6,10 +6,9 @@ use embedded_graphics::{
     text::Text,
 };
 use esp_idf_svc::hal::delay::FreeRtos;
-use esp_idf_svc::hal::gpio;
 use esp_idf_svc::hal::prelude::Peripherals;
 
-use esp32s2_common_lib::set_sh1106_display;
+use esp32s2_common_lib::sh1106_display::set_sh1106_display;
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
