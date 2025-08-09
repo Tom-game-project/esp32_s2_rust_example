@@ -12,13 +12,15 @@ use esp_idf_svc::hal::{
 use sh1106::{prelude::*, Builder};
 use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::gpio::PinDriver;
-use crate::gpio::OutputPin;
-use crate::gpio::Output;
+//use crate::gpio::OutputPin;
+//use crate::gpio::Output;
+use esp_idf_hal::gpio::OutputPin;
+use esp_idf_hal::gpio::Output;
 use esp_idf_svc::hal::peripheral::Peripheral;
 use esp_idf_svc::hal::spi;
 
 /// 任意のGPIOピンとSPIペリフェラルを受け取り、ディスプレイの初期化を行う
-pub fn set_display<'d, RST, DC, SCLK, SDA, CS, SPI>(
+pub fn set_sh1106_display<'d, RST, DC, SCLK, SDA, CS, SPI>(
     rst_pin: RST,
     dc_pin: DC,
     sclk_pin: SCLK,
@@ -80,4 +82,16 @@ where
     log::info!("OLED Initialized");
 
     Ok((display, rst_driver))
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    //#[test]
+    //fn it_works() {
+    //    let result = add(2, 2);
+    //    assert_eq!(result, 4);
+    //}
 }

@@ -1,25 +1,21 @@
 [package]
-name = "lcd_example"
+name = "esp32s2_common_lib"
 version = "0.1.0"
-authors = ["Tom0427 <82128211+Tom-game-project@users.noreply.github.com>"]
-edition = "2021"
-resolver = "2"
-rust-version = "1.77"
+edition = "2024"
 
-[[bin]]
-name = "lcd_example"
-harness = false # do not use the built in cargo test harness -> resolve rust-analyzer errors
+[lib]
+name = "esp32s2_common_lib"       # ライブラリとしての公開名
+path = "src/lib.rs"               # エントリポイント
 
 [profile.release]
 opt-level = "s"
 
 [profile.dev]
-debug = true    # Symbols are nice and they don't increase the size on Flash
+debug = true
 opt-level = "z"
 
 [features]
 default = []
-
 experimental = ["esp-idf-svc/experimental"]
 
 [dependencies]
@@ -32,7 +28,8 @@ anyhow = "1.0.86"
 sh1106 = "0.5.0"
 embedded-graphics = "0.8.1"
 
-esp32s2_common_lib = { path = "../esp32s2_common_lib" }
-
 [build-dependencies]
 embuild = "0.33"
+sh1106 = "0.5.0"
+embedded-graphics = "0.8.1"
+

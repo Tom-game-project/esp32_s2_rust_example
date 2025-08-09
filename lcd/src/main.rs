@@ -8,8 +8,8 @@ use embedded_graphics::{
 use esp_idf_svc::hal::delay::FreeRtos;
 use esp_idf_svc::hal::gpio;
 use esp_idf_svc::hal::prelude::Peripherals;
-mod display;
-use display::set_display;
+
+use esp32s2_common_lib::set_sh1106_display;
 
 fn main() -> anyhow::Result<()> {
     esp_idf_svc::sys::link_patches();
@@ -27,7 +27,7 @@ fn main() -> anyhow::Result<()> {
     let cs_pin = peripherals.pins.gpio34;
     let spi_peripheral = peripherals.spi2;
 
-    let (mut display, _rst_driver) = set_display(
+    let (mut display, _rst_driver) = set_sh1106_display(
         rst_pin,
         dc_pin,
         sclk_pin, 
