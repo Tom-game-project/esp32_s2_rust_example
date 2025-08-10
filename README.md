@@ -1,5 +1,15 @@
 # esp32 s2 rust example
 
+## esp32s2_common_lib
+
+ディスプレイ、加速度センサーのドライバを簡単に扱えるようにするライブラリ
+
+- sh1106_display
+  ディスプレイの初期化を簡易化する関数
+
+- mma7660fc
+  加速度センサードライバ
+
 ## lcd
 
 ### hardware

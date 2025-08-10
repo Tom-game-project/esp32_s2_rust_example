@@ -17,7 +17,6 @@ use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 
 use esp32s2_common_lib::mma7660fc::{Mode, DEFAULT_I2C_ADDRESS, Mma7660fc};
 
-
 fn main() -> anyhow::Result<()> {
     // ランタイムのパッチをリンクします
     esp_idf_svc::sys::link_patches();
@@ -53,7 +52,7 @@ fn main() -> anyhow::Result<()> {
             return Err(anyhow::anyhow!(error_str));
         }
     }
-    
+
     FreeRtos::delay_ms(100); // モード変更が安定するまで少し待機
 
     // --- メインループ ---
