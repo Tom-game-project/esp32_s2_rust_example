@@ -1,0 +1,42 @@
+[package]
+name = "lcd_example"
+version = "0.1.0"
+authors = ["Tom0427 <82128211+Tom-game-project@users.noreply.github.com>"]
+edition = "2021"
+resolver = "2"
+rust-version = "1.77"
+
+[[bin]]
+name = "lcd_example"
+harness = false # do not use the built in cargo test harness -> resolve rust-analyzer errors
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true    # Symbols are nice and they don't increase the size on Flash
+opt-level = "z"
+
+[features]
+default = []
+
+experimental = ["esp-idf-svc/experimental"]
+
+[dependencies]
+log = "0.4"
+esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
+esp-idf-hal = "0.45.2"
+
+anyhow = "1.0.86"
+
+sh1106 = "0.5.0"
+embedded-graphics = "0.8.1"
+
+esp32s2_common_lib = { path = "../esp32s2_common_lib" }
+
+
+softbody = { git = "https://github.com/Tom-game-project/SoftBody.git", tag = "v0.0.1-alpha-1" }
+
+
+[build-dependencies]
+embuild = "0.33"

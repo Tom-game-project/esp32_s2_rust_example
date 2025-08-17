@@ -1,0 +1,10 @@
+.embuild/
+target/
+Cargo.lock
+# vim 
+*.swo
+*.swp
+# env
+.env
+# note
+memo.md
